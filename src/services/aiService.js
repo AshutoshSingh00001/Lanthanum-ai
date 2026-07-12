@@ -1,156 +1,158 @@
 /**
- * AI Service — NVIDIA NIM API
+ * AI Service — Sonomer AI Study Assistant
+ * Uses Claude Opus 4.6 via Antigravity Proxy (Anthropic Messages API)
  */
 
-const AI_API_URL = '/api/generate';
-
-import designGuidelines from '../prompts/design-guidelines.md?raw';
-
-const UI_SYSTEM_PROMPT = `${designGuidelines}
-
-FINAL INSTRUCTION:
-Generate the requested UI following the guidelines above.
-Return ONLY a brief one-sentence description followed by the complete code in a \`\`\`html code block.
-Do not include any conversational filler.`;
-
-const AGENT_SYSTEM_PROMPT = `You are an AI design agent that can manipulate a design canvas. You have access to the following tools:
-
-AVAILABLE TOOLS:
-1. create_frame(x, y, width, height, title, html) - Create a new design frame with complete HTML document
-2. add_rectangle(x, y, width, height, fill, stroke, borderRadius) - Add a rectangle shape
-3. add_ellipse(x, y, width, height, fill, stroke) - Add an ellipse/circle shape
-4. add_text(x, y, content, fontSize, color, fontWeight) - Add text element
-5. move_element(id, x, y) - Move an element to position
-6. resize_element(id, width, height) - Resize element
-7. delete_element(id) - Delete element
-8. change_color(id, color) - Change element fill color
-9. generate_ui(prompt) - Generate a complete HTML UI and create a frame
-10. select_tool(toolName) - Switch to a specific tool (select, hand, frame, rectangle, ellipse, line, text, pen)
-
-IMPORTANT: When using create_frame or generate_ui, the HTML must be a COMPLETE, self-contained HTML document. Use Tailwind classes and DaisyUI components for premium styling. Focus on modern, high-end aesthetics.
-
-RESPONSE FORMAT:
-You MUST respond with a JSON array of tool calls. Each tool call is an object with "tool" and "args" fields.
-
-Example:
-\`\`\`json
-[
-  {"tool": "add_rectangle", "args": {"x": 100, "y": 100, "width": 200, "height": 150, "fill": "#ff6d33", "borderRadius": 12}},
-  {"tool": "add_text", "args": {"x": 120, "y": 130, "content": "Hello World", "fontSize": 24, "color": "#FFFFFF"}}
-]
-\`\`\`
-
-If the user asks something that doesn't need tool calls, respond with a "message" tool:
-\`\`\`json
-[{"tool": "message", "args": {"text": "Your response here"}}]
-\`\`\`
-
-Always respond ONLY with valid JSON wrapped in \`\`\`json code blocks.`;
-
-export function extractHtmlFromResponse(text) {
-  const htmlMatch = text.match(/```(?:html|xml)\n?([\s\S]*?)```/i);
-  if (htmlMatch) {
-    const content = htmlMatch[1].trim();
-    if (content.toLowerCase().startsWith('<!doctype') || content.toLowerCase().startsWith('<html')) {
-      return content;
-    }
-  }
-
-  const docMatch = text.match(/(<!DOCTYPE[\s\S]*<\/html>)/i);
-  if (docMatch) return docMatch[1].trim();
-
-  const htmlTagMatch = text.match(/(<html[\s\S]*<\/html>)/i);
-  if (htmlTagMatch) return htmlTagMatch[1].trim();
-
-  const tagMatch = text.match(/(<(div|main|section|nav|header|footer)[\s\S]*<\/\2>)/i);
-  if (tagMatch) return tagMatch[1].trim();
-
-  return text.replace(/```[a-z]*\n/g, '').replace(/```/g, '').trim();
-}
-
-export function extractDescription(text) {
-  const parts = text.split('```');
-  return parts[0].trim() || 'UI Component';
-}
-
-export function extractToolCalls(text) {
-  const jsonMatch = text.match(/```json\n?([\s\S]*?)```/);
-  if (jsonMatch) {
-    try {
-      return JSON.parse(jsonMatch[1].trim());
-    } catch (e) {
-      console.error('Failed to parse agent tool calls:', e);
-      return null;
-    }
-  }
-
-  try {
-    const trimmed = text.trim();
-    if (trimmed.startsWith('[')) {
-      return JSON.parse(trimmed);
-    }
-  } catch (e) {
-    // Not JSON
-  }
-
-  return null;
-}
-
 const PROXY_URL = import.meta.env.VITE_CLAUDE_PROXY_URL || 'http://localhost:8080';
-const MODEL = import.meta.env.VITE_CLAUDE_MODEL || 'claude-sonnet-4-6';
+const MODEL = import.meta.env.VITE_CLAUDE_MODEL || 'claude-opus-4-6-thinking';
 
-function normalizeConversationHistory(conversationHistory = []) {
-  return conversationHistory
+export const STUDY_SYSTEM_PROMPT = `You are **Sonomer AI**, an expert AI study tutor and academic companion. You help students excel in:
+
+1. **UPSC Civil Services Examination**
+   - Indian Polity & Governance (Constitution, amendments, landmark judgments)
+   - Indian History (Ancient, Medieval, Modern, Freedom Movement)
+   - Geography (Indian & World, physical, human, economic)
+   - Indian Economy (budget, fiscal policy, monetary policy, banking, trade)
+   - Environment & Ecology (biodiversity, climate change, conservation)
+   - Science & Technology (space, defense, biotech, IT, nuclear)
+   - Current Affairs (national, international, editorial analysis)
+   - Ethics, Integrity & Aptitude (case studies, thinkers, emotional intelligence)
+   - Essay Writing (structured arguments, balanced perspectives)
+   - Answer Writing (UPSC mains format: introduction, body, conclusion, diagrams)
+
+2. **Coding & Computer Science**
+   - Data Structures (arrays, trees, graphs, heaps, tries, hash maps)
+   - Algorithms (sorting, searching, DP, greedy, backtracking, graph algorithms)
+   - Languages: Python, JavaScript, C++, Java, SQL
+   - System Design (scalability, databases, caching, load balancing)
+   - Competitive Programming (Codeforces, LeetCode, optimization)
+   - Web Development (React, Node.js, APIs, databases)
+   - Object-Oriented Programming & Design Patterns
+
+3. **Mathematics**
+   - Calculus (limits, derivatives, integrals, differential equations)
+   - Linear Algebra (matrices, eigenvalues, vector spaces)
+   - Probability & Statistics (distributions, hypothesis testing, Bayes)
+   - Number Theory (primes, modular arithmetic, cryptography)
+   - Discrete Mathematics (combinatorics, graph theory, logic)
+   - Abstract Algebra (groups, rings, fields)
+
+4. **Science**
+   - Physics (mechanics, thermodynamics, electromagnetism, quantum, relativity)
+   - Chemistry (organic, inorganic, physical, biochemistry)
+   - Biology (cell biology, genetics, evolution, ecology, human physiology)
+   - Astronomy & Astrophysics
+
+## Your Teaching Style:
+- **Clear & Structured**: Use headings, bullet points, numbered steps
+- **Depth-adaptive**: Start with a clear explanation, then go deeper if asked
+- **Examples-first**: Always illustrate concepts with concrete examples
+- **UPSC-oriented**: For UPSC topics, structure answers in mains-format when appropriate
+- **Code-ready**: For coding questions, provide clean, commented, runnable code
+- **Math-precise**: Show step-by-step solutions, use proper mathematical notation
+- **Encouraging**: Be supportive and motivating, celebrate progress
+
+## Formatting Rules:
+- Use **markdown** for formatting (bold, italic, headings, lists, tables)
+- Use \`\`\`language code blocks with the correct language identifier
+- For math, write equations clearly (use plain text math notation since LaTeX may not render)
+- Use tables for comparisons (e.g., comparing historical events, algorithm complexities)
+- For UPSC answers, use the format: **Introduction → Body (with subheadings) → Conclusion**
+- When analyzing images (handwritten problems, diagrams, graphs), describe what you see and solve accordingly
+
+## Important:
+- Be accurate and factual. If unsure, say so.
+- For UPSC, cite relevant articles, amendments, committees, and reports when applicable.
+- For coding, always consider edge cases and time/space complexity.
+- For math, show every step of the solution.
+- For science, use analogies to make complex concepts accessible.`;
+
+/**
+ * Build the messages array for the API call, supporting text and image content.
+ */
+function buildMessages(conversationHistory = [], userMessage, attachments = []) {
+  // Normalize conversation history
+  const history = conversationHistory
     .filter((msg) => msg?.content)
-    .map((msg) => ({
-      role: msg.role === 'user' ? 'user' : 'assistant',
-      content: msg.content,
-    }));
-}
+    .map((msg) => {
+      // If message has image attachments, reconstruct as multi-part content
+      if (msg.role === 'user' && msg.attachments?.length > 0) {
+        const contentParts = [];
+        
+        // Add text part
+        if (msg.content) {
+          contentParts.push({ type: 'text', text: msg.content });
+        }
+        
+        // Add image parts
+        for (const att of msg.attachments) {
+          if (att.type?.startsWith('image/')) {
+            contentParts.push({
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: att.type,
+                data: att.data,
+              },
+            });
+          }
+        }
+        
+        return { role: 'user', content: contentParts.length > 0 ? contentParts : msg.content };
+      }
+      
+      return {
+        role: msg.role === 'user' ? 'user' : 'assistant',
+        content: msg.content,
+      };
+    });
 
-export async function callGemini(systemPrompt, userMessage, conversationHistory = []) {
-  const messages = [
-    ...normalizeConversationHistory(conversationHistory),
-    { role: 'user', content: userMessage },
-  ];
-
-  const response = await fetch(`${PROXY_URL}/v1/messages`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': 'test',
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 8192,
-      system: systemPrompt,
-      messages,
-    }),
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data?.error?.message || data?.message || 'AI API request failed');
+  // Build current user message
+  const currentContent = [];
+  
+  if (userMessage) {
+    currentContent.push({ type: 'text', text: userMessage });
+  }
+  
+  // Add image attachments as vision content
+  for (const att of attachments) {
+    if (att.type?.startsWith('image/')) {
+      const base64Data = att.data.includes(',') ? att.data.split(',')[1] : att.data;
+      currentContent.push({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: att.type,
+          data: base64Data,
+        },
+      });
+    } else {
+      // For non-image files, include as text description
+      if (att.textContent) {
+        currentContent.push({
+          type: 'text',
+          text: `\n\n--- Attached File: ${att.name} ---\n${att.textContent}\n--- End of File ---`,
+        });
+      }
+    }
   }
 
-  const text = data?.content
-    ?.filter((block) => block.type === 'text')
-    .map((block) => block.text)
-    .join('')
-    .trim();
+  const currentMessage = {
+    role: 'user',
+    content: currentContent.length === 1 && currentContent[0].type === 'text'
+      ? currentContent[0].text
+      : currentContent,
+  };
 
-  if (!text) throw new Error('API returned an empty response');
-
-  return text;
+  return [...history, currentMessage];
 }
 
-export async function* streamGemini(systemPrompt, userMessage, conversationHistory = []) {
-  const messages = [
-    ...normalizeConversationHistory(conversationHistory),
-    { role: 'user', content: userMessage },
-  ];
+/**
+ * Stream a chat response from Claude.
+ * This is the main entry point for the chat interface.
+ */
+export async function* streamChat(userMessage, conversationHistory = [], attachments = []) {
+  const messages = buildMessages(conversationHistory, userMessage, attachments);
 
   const response = await fetch(`${PROXY_URL}/v1/messages`, {
     method: 'POST',
@@ -161,8 +163,8 @@ export async function* streamGemini(systemPrompt, userMessage, conversationHisto
     },
     body: JSON.stringify({
       model: MODEL,
-      max_tokens: 8192,
-      system: systemPrompt,
+      max_tokens: 16384,
+      system: STUDY_SYSTEM_PROMPT,
       messages,
       stream: true,
     }),
@@ -170,7 +172,7 @@ export async function* streamGemini(systemPrompt, userMessage, conversationHisto
 
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(data?.error?.message || data?.message || 'AI API streaming request failed');
+    throw new Error(data?.error?.message || data?.message || 'AI API request failed');
   }
 
   const reader = response.body.getReader();
@@ -220,26 +222,47 @@ export async function* streamGemini(systemPrompt, userMessage, conversationHisto
   };
 }
 
-export async function generateUI(prompt, conversationHistory = []) {
-  const response = await callGemini(UI_SYSTEM_PROMPT, prompt, conversationHistory);
-  const html = extractHtmlFromResponse(response);
-  const description = extractDescription(response);
+/**
+ * Non-streaming chat call (for simple requests or title generation).
+ */
+export async function callChat(userMessage, systemPrompt = STUDY_SYSTEM_PROMPT, conversationHistory = []) {
+  const messages = conversationHistory
+    .filter((msg) => msg?.content)
+    .map((msg) => ({
+      role: msg.role === 'user' ? 'user' : 'assistant',
+      content: typeof msg.content === 'string' ? msg.content : msg.content,
+    }));
 
-  return {
-    rawResponse: response,
-    html,
-    description,
-  };
+  messages.push({ role: 'user', content: userMessage });
+
+  const response = await fetch(`${PROXY_URL}/v1/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': 'test',
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: 16384,
+      system: systemPrompt,
+      messages,
+    }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data?.error?.message || data?.message || 'AI API request failed');
+  }
+
+  const text = data?.content
+    ?.filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('')
+    .trim();
+
+  if (!text) throw new Error('API returned an empty response');
+
+  return text;
 }
-
-export async function executeAgentAction(prompt, conversationHistory = []) {
-  const response = await callGemini(AGENT_SYSTEM_PROMPT, prompt, conversationHistory);
-  const toolCalls = extractToolCalls(response);
-
-  return {
-    rawResponse: response,
-    toolCalls,
-  };
-}
-
-export { UI_SYSTEM_PROMPT, AGENT_SYSTEM_PROMPT };

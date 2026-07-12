@@ -1,79 +1,50 @@
-# Lanthanum AI
-A full stack web application that lets users build macOS and Windows desktop apps visually + with code, powered by Electron, with AI assistance.
+# Sonomer AI
 
-# The Three View Modes
-Button 1 — Code View
+A full-stack AI-powered study assistant web application focused on UPSC preparation, coding, mathematics, and science learning. Powered by Claude Opus 4.6 via Anthropic API proxy.
 
-Shows a full Monaco Editor (VS Code-like)
-User can directly edit HTML, CSS, JS
-Supports syntax highlighting, autocomplete
-Changes reflect in other views
+# Architecture
 
-Button 2 — Render UI View
+- **Frontend**: React 18 + Vite
+- **AI Backend**: Claude Opus 4.6 via Antigravity proxy (Anthropic Messages API)
+- **Styling**: Vanilla CSS with custom properties, dark theme
+- **State**: React useState + localStorage for conversation persistence
 
-Shows a live preview of the app being built
-Renders the actual HTML/CSS/JS output
-Like seeing your Electron app window in the browser
-Updates seamlessly as code changes
+# Core Feature: AI Chat Interface
 
-Button 3 — Component + Edit View
+The entire application is a single full-screen chat interface with:
 
-This is your biggest differentiator
-User clicks any element in the UI (button, div, navbar etc.)
-A panel opens showing that component's CSS properties
-User can edit margin, padding, color, font, border etc. visually
-Changes write back to the code automatically
-Like browser DevTools but friendlier and built-in
+1. **Sidebar** — Conversation history, new chat, subject quick-filters (UPSC, Coding, Math, Science)
+2. **Chat Area** — Full-width message display with rich text rendering
+3. **Input Area** — Multi-line textarea with file and image upload support
 
-# The Component System
+# Subject Focus Areas
 
-Generated App
-      ↓
-AI also generates a JSON of all components
-      ↓
-{
-  "components": [
-    { "id": "btn-1", "type": "button", "text": "Click me",
-      "css": { "color": "white", "background": "#333", "padding": "8px 16px" }
-    },
-    { "id": "sidebar-1", "type": "div", "role": "sidebar",
-      "css": { "width": "250px", "background": "#1a1a1a" }
-    }
-  ]
-}
-      ↓
-This JSON powers the component selector and CSS editor panel
+1. **UPSC Preparation** — Indian polity, history, geography, economy, current affairs, ethics, essay writing
+2. **Coding** — Data structures, algorithms, Python, JavaScript, C++, system design, competitive programming
+3. **Mathematics** — Calculus, algebra, linear algebra, probability, statistics, number theory
+4. **Science** — Physics, chemistry, biology, quantum mechanics, thermodynamics, organic chemistry
 
-# Framework Support
+# AI Behavior
 
-User can choose their stack before building:
-FrontendStylingBuilderVanilla HTML/JSPlain CSSElectronReact JSTailwind CSSElectronVue JSBootstrapElectronSvelteCustom CSSElectron
-The AI generates code accordingly based on chosen framework.
+- Uses Claude Opus 4.6 (thinking model) via streaming API
+- System prompt configured as expert tutor across all focus subjects
+- Supports image uploads for solving handwritten problems, diagrams, graphs
+- Supports file uploads for analyzing documents, PDFs, CSVs
+- Renders responses with markdown formatting, code blocks with syntax highlighting
+- Streaming responses for real-time feel
 
-Your Tool
-    ↓
-Packages everything into a zip
-    ↓
-├── package.json
-├── main.js          ← Electron entry
-├── index.html       ← or React build
-├── style.css
-├── app.js
-└── README.md        ← instructions to run
-    ↓
-User downloads zip
-    ↓
-npm install → npm start → App runs on macOS / Windows
+# File Structure
 
-# The Full User Journey
-
-1. Open your web tool
-2. Choose framework (Vanilla / React / Vue + CSS / Tailwind)
-3. Type in AI chat: "Build me a note taking app with dark sidebar"
-4. AI generates full Electron project code + component JSON
-5. Switch to Render View → see the app live
-6. Switch to Component View → click the sidebar → change its color
-7. Switch to Code View → fine tune the JS logic
-8. Export → download zip → run locally as a real desktop app
-
-
+```
+src/
+├── main.jsx              ← React entry point (no routing)
+├── App.jsx               ← Renders ChatApp directly
+├── index.css             ← Complete dark-theme stylesheet
+├── components/
+│   └── ChatApp.jsx       ← Full chat interface (sidebar + messages + input)
+├── services/
+│   └── aiService.js      ← Claude API integration (streaming + vision)
+└── assets/
+    ├── LA.png            ← Logo icon
+    └── Sonomer.png     ← Full logo
+```
